@@ -239,7 +239,6 @@ class Dashboard:
             [
                 [time_row],
                 [sg.HorizontalSeparator()],
-                # [sc_row],
                 [sd_row],
                 [so_row],
                 [sg.Button('Save')]
