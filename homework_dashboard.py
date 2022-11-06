@@ -3,12 +3,9 @@ import PySimpleGUI as sg
 import datetime as dt
 
 class Assignment:
-    def __init__(self, title, due_date):
+    def __init__(self, title, due_date, status = 'Pending'):
         self.title = title
-        self.properties = {'Due-date' : due_date, 'Status' : 'Pending'}
-
-    # def __del__(self):
-    #     return
+        self.properties = {'Due-date' : due_date, 'Status' : status}
 
     def check_status(self, urgent_timedelta):
         if self.properties['Status'] == 'Done':
@@ -31,8 +28,8 @@ class Course:
 class Dashboard:
     def __init__(self):
         self.courses = {}
-        self.preferences = {'Time' : 24*60*60, 'Show Courses' : 'All', 'Hide Done' : False, 'Hide Overdue' : False}
-        course_listbox = [sg.Listbox(values=self.courses.keys(),
+        self.preferences = {'Time' : 24*60*60, 'Hide Done' : False, 'Hide Overdue' : False}
+        course_listbox = [sg.Listbox(values=[],
                                      size=(30, 10),
                                      key='-COURSE_LIST-',
                                      enable_events=True,
@@ -75,41 +72,35 @@ class Dashboard:
             self.main_window.read(timeout=1)
             self.read_from_file()
             event, values = self.main_window.read()
-            if event in (None, sg.WINDOW_CLOSED):
+            if event in (None, 'Exit', sg.WINDOW_CLOSED):
                 break
             else:
-                if event in ['Add Course', 'Add Assignment', '-ASSIGNMENT_LIST-', '-COURSE_LIST-', 'Settings', 'Delete Assignment', 'Delete Course']:
+                if event in ['Add Course', 'Add Assignment', '-ASSIGNMENT_LIST-', '-COURSE_LIST-', 'Settings']:
                     self.update_assignments_status()
                     self.reset_errors()
                 if event == 'Delete Course':
                     if values['-COURSE_LIST-']:
                         if self.confirmation_window():
                             self.delete_course(values['-COURSE_LIST-'][0])
-                            self.write_to_file()
                     else:
                         self.main_window['-COURSES_ERROR-'].update('No course was selected')
                 if event == 'Add Course':
                     self.add_course_window()
-                    self.write_to_file()
                 if event == 'Add Assignment':
                     self.add_assignment_window()
-                    self.write_to_file()
                 if event == 'Delete Assignment':
                     if len(values['-ASSIGNMENT_LIST-'])>0:
                         self.delete_assignment(index = values['-ASSIGNMENT_LIST-'][0])
                     else:
                         self.main_window['-ASSIGNMENTS_ERROR-'].update('No assignment was selected')
-                    self.write_to_file()
                 if event == 'Mark As Done':
                     if len(values['-ASSIGNMENT_LIST-'])>0:
                         selected_assignment = self.main_window['-ASSIGNMENT_LIST-'].Values[values['-ASSIGNMENT_LIST-'][0]]
                         self.mark_as_done(title=selected_assignment[0], course=selected_assignment[1])
                     else:
                         self.main_window['-ASSIGNMENTS_ERROR-'].update('No assignment was selected')
-                    self.write_to_file()
                 if event == 'Settings':
                     self.settings_window()
-                    self.write_to_file()
         self.main_window.close()
 
     def add_course_window(self):
@@ -176,19 +167,20 @@ class Dashboard:
         self.courses[title] = course_obj
         self.main_window['-COURSE_LIST-'].Values.append(course_obj.title)
         self.main_window['-COURSE_LIST-'].update(self.main_window['-COURSE_LIST-'].Values)
+        self.write_to_file()
 
-
-    def add_assignment(self, course, title, due_date):
-        assignment_obj = Assignment(title=title, due_date=dt.datetime.strptime(due_date, "%Y-%m-%d %H:%M:%S"))
+    def add_assignment(self, course, title, due_date, status = 'Pending'):
+        assignment_obj = Assignment(title=title, due_date=dt.datetime.strptime(due_date, "%Y-%m-%d %H:%M:%S"), status=status)
         (self.courses[course].assignments)[title] = assignment_obj
         self.main_window['-ASSIGNMENT_LIST-'].Values.append([title, course, due_date, assignment_obj.check_status(urgent_timedelta = self.preferences['Time'])])
         self.main_window['-ASSIGNMENT_LIST-'].update(self.main_window['-ASSIGNMENT_LIST-'].Values)
         self.update_assignments_status()
+        self.write_to_file()
 
     def delete_assignment(self, index):
-        # self.courses[self.main_window['-ASSIGNMENT_LIST-'].Values[index][1]].assignments[self.main_window['-ASSIGNMENT_LIST-'].Values[index][0]].__del__()
         self.courses[self.main_window['-ASSIGNMENT_LIST-'].Values[index][1]].assignments.pop(self.main_window['-ASSIGNMENT_LIST-'].Values[index][0])
         self.main_window['-ASSIGNMENT_LIST-'].Values.pop(index)
+        self.write_to_file()
         self.main_window['-ASSIGNMENT_LIST-'].update(self.main_window['-ASSIGNMENT_LIST-'].Values)
 
     def reset_errors(self):
@@ -220,6 +212,7 @@ class Dashboard:
             assignment = [i.title, course, str(i.properties['Due-date']), i.properties['Status']]
             self.delete_assignment(self.main_window['-ASSIGNMENT_LIST-'].Values.index(assignment))
         self.courses.pop(course)
+        self.write_to_file()
         self.main_window['-COURSE_LIST-'].update(list(self.courses.keys()))
 
     def settings_window(self):
@@ -231,18 +224,7 @@ class Dashboard:
                                select_mode="LISBOX_SELECT_MODE_SINGLE",
                                size=(10,3)),
                     sg.Text(' before due-date')]
-        # if self.preferences['Hide Done']==True:
-        #     sd_def='No'
-        # else:
-        #     sd_def='Yes'
-        # if self.preferences['Hide Overdue']==True:
-        #     so_def='No'
-        # else:
-        #     so_def='Yes'
-        # sc_row = [sg.Text('Display assignments for: '), sg.Listbox(values=['All Courses', 'Selected Course Only'],
-        #                                                           default_values='All Courses',
-        #                                                           size=(20,2),
-        #                                                           select_mode="LISBOX_SELECT_MODE_SINGLE")]
+
         sd_row = [sg.Text('Hide done assignments: '), sg.Listbox(values=['Yes', 'No'],
                                                                  default_values=self.sd_def(),
                                                                  select_mode="LISBOX_SELECT_MODE_SINGLE",
@@ -270,6 +252,7 @@ class Dashboard:
             if event in (None, sg.WINDOW_CLOSED):
                 return
             elif event == 'Save':
+                self.write_to_file()
                 if values['-HIDE_DONE-'][0]=='Yes':
                     self.preferences['Hide Done'] = True
                 else:
@@ -317,6 +300,7 @@ class Dashboard:
 
     def mark_as_done(self, title, course):
         (self.courses[course].assignments[title]).properties['Status'] = 'Done'
+        self.write_to_file()
         self.update_assignments_status()
 
     def so_def(self):
@@ -329,18 +313,17 @@ class Dashboard:
         return 'No'
 
     def write_to_file(self):
-        self.update_assignments_status()
         data = {'Preferences' : self.preferences, 'Courses' : {}}
         for course in list(self.courses.keys()):
             assignments={}
             for assignment in self.courses[course].assignments.keys():
                 assignments[assignment] = (self.courses[course].assignments[assignment]).properties
-                assignments[assignment]['Due-date'] = (assignments[assignment]['Due-date']).strftime("%Y-%m-%d %H:%M:%S")
+                if isinstance((assignments[assignment]['Due-date']), dt.datetime):
+                    assignments[assignment]['Due-date'] = (assignments[assignment]['Due-date']).strftime("%Y-%m-%d %H:%M:%S")
             data['Courses'][course] = assignments
         data = json.dumps(data)
         with open("courses_data.json", "w") as json_file:
             json_file.write(data)
-
 
     def read_from_file(self):
         try:
@@ -348,22 +331,12 @@ class Dashboard:
                 json_data = json.load(json_file)
             self.preferences = json_data['Preferences']
             for course_title in list(json_data['Courses'].keys()):
-                course_obj = Course(title=course_title)
+                if course_title not in self.main_window['-COURSE_LIST-'].Values:
+                    self.add_course(course_title)
                 for assignment_title in json_data['Courses'][course_title].keys():
-                    assignment_obj = Assignment(title=assignment_title, due_date=json_data['Courses'][course_title][assignment_title]['Due-date'])
-                    course_obj.assignments[assignment_title] = assignment_obj
-                self.courses[course_title] = course_obj
-            self.main_window['-COURSE_LIST-'].update(list(json_data['Courses'].keys()))
+                    self.add_assignment(course=course_title, title=assignment_title, due_date=json_data['Courses'][course_title][assignment_title]['Due-date'], status=json_data['Courses'][course_title][assignment_title]['Status'])
             self.update_assignments_status()
         except:
             self.main_window['-ASSIGNMENTS_ERROR-'].update('There may have been a problem reading your saved data')
 
-
-
-
-
-
-
-
 Dashboard().main_window()
-
